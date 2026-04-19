@@ -47,7 +47,8 @@ ignore = [
 known-first-party = ["application", "core", "domain", "infrastructure"]
 
 [tool.ruff.lint.per-file-ignores]
-"infrastructure/http/v1/routes/*.py" = ["B008"]
+"**/routes/*.py" = ["B008"]
+"**/conftest.py" = ["I001"]
 
 [tool.mypy]
 python_version = "3.12"
