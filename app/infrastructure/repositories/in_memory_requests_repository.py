@@ -1,6 +1,6 @@
 from threading import Lock
 
-from domain.entities.request import NotificationRequest
+from domain.models.request import NotificationRequest
 from domain.ports.requests_repository import RequestsRepository
 
 

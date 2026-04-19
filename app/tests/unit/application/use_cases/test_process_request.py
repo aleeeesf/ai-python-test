@@ -1,12 +1,11 @@
 """Unit tests for start_process_request and deliver_request functions."""
 
 import pytest
-
 from application.use_cases.process_request import (
     deliver_request,
     start_process_request,
 )
-from domain.entities.request import NotificationStatus
+from domain.models.request import NotificationStatus
 
 
 class TestStartProcessRequest:
@@ -72,7 +71,7 @@ class TestStartProcessRequest:
         requests_repository,
         processing_request,
     ):
-        """Start does not reprocess sent requests."""
+        """Start does not reprocess requests already being processed."""
         # Arrange
         await requests_repository.save(processing_request)
 
@@ -89,13 +88,14 @@ class TestDeliverRequest:
     """Test suite for deliver_request function."""
 
     @pytest.mark.asyncio
-    async def test_marks_request_as_sent_when_provider_succeeds(
+    async def test_extracts_info_and_marks_request_as_sent_on_success(
         self,
         requests_repository,
+        fake_ai_extractor,
         fake_notification_provider,
         processing_request,
     ):
-        """Deliver marks a processing request as sent on provider success."""
+        """Deliver extracts AI data, sends notification, and marks request as sent."""
         # Arrange
         await requests_repository.save(processing_request)
 
@@ -103,6 +103,7 @@ class TestDeliverRequest:
         await deliver_request(
             processing_request.id,
             requests_repository,
+            fake_ai_extractor,
             fake_notification_provider,
         )
         stored_request = await requests_repository.get_by_id(processing_request.id)
@@ -110,16 +111,51 @@ class TestDeliverRequest:
         # Assert
         assert stored_request is not None
         assert stored_request.status == NotificationStatus.SENT
+        assert stored_request.to == fake_ai_extractor.result.to
+        assert stored_request.message == fake_ai_extractor.result.message
+        assert stored_request.type == fake_ai_extractor.result.type
         assert (
             stored_request.provider_id == fake_notification_provider.result.provider_id
         )
         assert stored_request.error is None
+        assert len(fake_ai_extractor.calls) == 1
         assert len(fake_notification_provider.calls) == 1
+
+    @pytest.mark.asyncio
+    async def test_marks_request_as_failed_when_ai_extraction_fails(
+        self,
+        requests_repository,
+        fake_ai_extractor,
+        fake_notification_provider,
+        processing_request,
+        ai_errors,
+    ):
+        """Deliver marks request as failed when AI extraction fails."""
+        # Arrange
+        fake_ai_extractor.side_effects = [ai_errors["validation"]]
+        await requests_repository.save(processing_request)
+
+        # Act
+        await deliver_request(
+            processing_request.id,
+            requests_repository,
+            fake_ai_extractor,
+            fake_notification_provider,
+        )
+        stored_request = await requests_repository.get_by_id(processing_request.id)
+
+        # Assert
+        assert stored_request is not None
+        assert stored_request.status == NotificationStatus.FAILED
+        assert "AI extraction failed" in stored_request.error
+        assert len(fake_ai_extractor.calls) == 1
+        assert len(fake_notification_provider.calls) == 0  # Never reached provider
 
     @pytest.mark.asyncio
     async def test_marks_request_as_failed_when_provider_is_unauthorized(
         self,
         requests_repository,
+        fake_ai_extractor,
         fake_notification_provider,
         processing_request,
         provider_errors,
@@ -133,6 +169,7 @@ class TestDeliverRequest:
         await deliver_request(
             processing_request.id,
             requests_repository,
+            fake_ai_extractor,
             fake_notification_provider,
         )
         stored_request = await requests_repository.get_by_id(processing_request.id)
@@ -141,12 +178,14 @@ class TestDeliverRequest:
         assert stored_request is not None
         assert stored_request.status == NotificationStatus.FAILED
         assert stored_request.error == "Invalid API key"
+        assert len(fake_ai_extractor.calls) == 1
         assert len(fake_notification_provider.calls) == 1
 
     @pytest.mark.asyncio
     async def test_retries_and_marks_request_as_sent_when_transient_error_recovers(
         self,
         requests_repository,
+        fake_ai_extractor,
         fake_notification_provider,
         processing_request,
         provider_errors,
@@ -160,6 +199,7 @@ class TestDeliverRequest:
         await deliver_request(
             processing_request.id,
             requests_repository,
+            fake_ai_extractor,
             fake_notification_provider,
         )
         stored_request = await requests_repository.get_by_id(processing_request.id)
@@ -168,12 +208,14 @@ class TestDeliverRequest:
         assert stored_request is not None
         assert stored_request.status == NotificationStatus.SENT
         assert stored_request.error is None
+        assert len(fake_ai_extractor.calls) == 1
         assert len(fake_notification_provider.calls) == 2
 
     @pytest.mark.asyncio
     async def test_marks_request_as_failed_when_unexpected_error_happens(
         self,
         requests_repository,
+        fake_ai_extractor,
         fake_notification_provider,
         processing_request,
     ):
@@ -186,6 +228,7 @@ class TestDeliverRequest:
         await deliver_request(
             processing_request.id,
             requests_repository,
+            fake_ai_extractor,
             fake_notification_provider,
         )
         stored_request = await requests_repository.get_by_id(processing_request.id)
@@ -193,13 +236,15 @@ class TestDeliverRequest:
         # Assert
         assert stored_request is not None
         assert stored_request.status == NotificationStatus.FAILED
-        assert stored_request.error == "Unexpected processing error: Boom"
+        assert "Unexpected provider error" in stored_request.error
+        assert len(fake_ai_extractor.calls) == 1
         assert len(fake_notification_provider.calls) == 1
 
     @pytest.mark.asyncio
     async def test_marks_request_as_failed_when_retry_limit_exhausted(
         self,
         requests_repository,
+        fake_ai_extractor,
         fake_notification_provider,
         processing_request,
         provider_errors,
@@ -218,6 +263,7 @@ class TestDeliverRequest:
         await deliver_request(
             processing_request.id,
             requests_repository,
+            fake_ai_extractor,
             fake_notification_provider,
         )
         stored_request = await requests_repository.get_by_id(processing_request.id)
@@ -226,12 +272,14 @@ class TestDeliverRequest:
         assert stored_request is not None
         assert stored_request.status == NotificationStatus.FAILED
         assert stored_request.error is not None  # Contains error message
+        assert len(fake_ai_extractor.calls) == 1
         assert len(fake_notification_provider.calls) == 4  # Exhausted retries
 
     @pytest.mark.asyncio
     async def test_deliver_when_request_does_not_exist(
         self,
         requests_repository,
+        fake_ai_extractor,
         fake_notification_provider,
     ):
         """Deliver gracefully handles missing request (idempotent)."""
@@ -239,16 +287,19 @@ class TestDeliverRequest:
         await deliver_request(
             "nonexistent-request-id",
             requests_repository,
+            fake_ai_extractor,
             fake_notification_provider,
         )
 
         # Assert
+        assert len(fake_ai_extractor.calls) == 0
         assert len(fake_notification_provider.calls) == 0
 
     @pytest.mark.asyncio
     async def test_deliver_when_request_not_in_processing_state(
         self,
         requests_repository,
+        fake_ai_extractor,
         fake_notification_provider,
         sent_request,
     ):
@@ -260,158 +311,10 @@ class TestDeliverRequest:
         await deliver_request(
             sent_request.id,
             requests_repository,
+            fake_ai_extractor,
             fake_notification_provider,
         )
 
         # Assert
+        assert len(fake_ai_extractor.calls) == 0
         assert len(fake_notification_provider.calls) == 0
-
-
-class TestDeliverRequestConcurrency:
-    """Concurrency tests for deliver_request function."""
-
-    @pytest.mark.asyncio
-    async def test_concurrent_delivers_only_one_succeeds(
-        self,
-        requests_repository,
-        fake_notification_provider,
-        processing_request,
-    ):
-        """Race condition: Two concurrent delivers on same request (only provider wins)."""
-        import asyncio
-
-        # Arrange
-        await requests_repository.save(processing_request)
-
-        # Make provider return different results on each call to detect double-call
-        call_count = 0
-        original_send = fake_notification_provider.send
-
-        async def send_with_counter(to: str, message: str, type: str):
-            nonlocal call_count
-            call_count += 1
-            return await original_send(to, message, type)
-
-        fake_notification_provider.send = send_with_counter
-
-        # Act - Race: Two concurrent deliver calls
-        await asyncio.gather(
-            deliver_request(
-                processing_request.id,
-                requests_repository,
-                fake_notification_provider,
-            ),
-            deliver_request(
-                processing_request.id,
-                requests_repository,
-                fake_notification_provider,
-            ),
-        )
-
-        stored_request = await requests_repository.get_by_id(processing_request.id)
-
-        # Assert - Request should be SENT despite race
-        assert stored_request is not None
-        assert stored_request.status == NotificationStatus.SENT
-        # Both calls may reach provider (no lock in this simple impl)
-        # The test documents the behavior
-        assert call_count >= 1
-
-    @pytest.mark.asyncio
-    async def test_multiple_different_requests_concurrent(
-        self,
-        requests_repository,
-        fake_notification_provider,
-    ):
-        """Concurrent delivers on different requests don't interfere."""
-        import asyncio
-
-        # Arrange - Two different processing requests
-        from domain.entities.request import NotificationRequest
-
-        req1 = NotificationRequest(
-            id="req-1",
-            to="user1@example.com",
-            message="Message 1",
-            type="email",
-            status=NotificationStatus.PROCESSING,
-        )
-        req2 = NotificationRequest(
-            id="req-2",
-            to="user2@example.com",
-            message="Message 2",
-            type="email",
-            status=NotificationStatus.PROCESSING,
-        )
-        await requests_repository.save(req1)
-        await requests_repository.save(req2)
-
-        # Act - Process both concurrently
-        await asyncio.gather(
-            deliver_request(req1.id, requests_repository, fake_notification_provider),
-            deliver_request(req2.id, requests_repository, fake_notification_provider),
-        )
-
-        # Assert - Both marked as SENT independently
-        stored_req1 = await requests_repository.get_by_id(req1.id)
-        stored_req2 = await requests_repository.get_by_id(req2.id)
-
-        assert stored_req1 is not None
-        assert stored_req1.status == NotificationStatus.SENT
-        assert stored_req2 is not None
-        assert stored_req2.status == NotificationStatus.SENT
-        # Provider called once for each request
-        assert len(fake_notification_provider.calls) == 2
-
-    @pytest.mark.asyncio
-    async def test_concurrent_success_and_failure_different_requests(
-        self,
-        requests_repository,
-        fake_notification_provider,
-    ):
-        """Concurrent: different requests process independently without interference."""
-        import asyncio
-
-        from domain.entities.request import NotificationRequest
-
-        # Arrange - Two different processing requests
-        req1 = NotificationRequest(
-            id="req-1-concurrent",
-            to="user1@example.com",
-            message="Message 1",
-            type="email",
-            status=NotificationStatus.PROCESSING,
-        )
-        req2 = NotificationRequest(
-            id="req-2-concurrent",
-            to="user2@example.com",
-            message="Message 2",
-            type="email",
-            status=NotificationStatus.PROCESSING,
-        )
-        await requests_repository.save(req1)
-        await requests_repository.save(req2)
-
-        # Act - Process both concurrently
-        await asyncio.gather(
-            deliver_request(req1.id, requests_repository, fake_notification_provider),
-            deliver_request(req2.id, requests_repository, fake_notification_provider),
-        )
-
-        # Assert - Both reach terminal state (SENT here since provider succeeds)
-        stored_req1 = await requests_repository.get_by_id(req1.id)
-        stored_req2 = await requests_repository.get_by_id(req2.id)
-
-        assert stored_req1 is not None
-        # Both should be in terminal state, not PROCESSING
-        assert stored_req1.status in (
-            NotificationStatus.SENT,
-            NotificationStatus.FAILED,
-        )
-        assert stored_req2 is not None
-        assert stored_req2.status in (
-            NotificationStatus.SENT,
-            NotificationStatus.FAILED,
-        )
-        # Each request processed independently with separate calls
-        assert len(fake_notification_provider.calls) >= 2

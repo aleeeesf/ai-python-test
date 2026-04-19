@@ -1,6 +1,6 @@
 from typing import Protocol
 
-from domain.entities.request import NotificationRequest
+from domain.models.request import NotificationRequest
 
 
 class RequestsRepository(Protocol):

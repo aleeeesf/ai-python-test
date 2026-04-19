@@ -4,8 +4,8 @@ import asyncio
 from unittest.mock import AsyncMock
 
 import pytest
-
-from domain.ports.notification_provider import ProviderResult
+from domain.ports.ai_extractor import AIExtractedInfo
+from domain.ports.notification_provider import NotificationProviderResult
 from infrastructure.workers.process_worker import ProcessWorker
 
 
@@ -17,12 +17,19 @@ class TestProcessWorker:
         """Worker dispatches a background task and removes it when done."""
         # Arrange
         mock_repo = AsyncMock()
+        mock_ai_extractor = AsyncMock()
+        mock_ai_extractor.extract.return_value = AIExtractedInfo(
+            to="user@example.com",
+            message="Test message",
+            type="email",
+        )
         mock_provider = AsyncMock()
-        mock_provider.send.return_value = ProviderResult(
+        mock_provider.send.return_value = NotificationProviderResult(
             provider_id="p-123", status="delivered"
         )
         worker = ProcessWorker(
             requests_repository=mock_repo,
+            ai_extractor=mock_ai_extractor,
             notification_provider=mock_provider,
         )
 
@@ -40,12 +47,19 @@ class TestProcessWorker:
         """Worker catches exceptions from deliver and cleans up task."""
         # Arrange
         mock_repo = AsyncMock()
+        mock_ai_extractor = AsyncMock()
+        mock_ai_extractor.extract.return_value = AIExtractedInfo(
+            to="user@example.com",
+            message="Test message",
+            type="email",
+        )
         mock_provider = AsyncMock()
         mock_provider.send.side_effect = RuntimeError(
             "Unexpected error during delivery"
         )
         worker = ProcessWorker(
             requests_repository=mock_repo,
+            ai_extractor=mock_ai_extractor,
             notification_provider=mock_provider,
         )
 
@@ -65,12 +79,19 @@ class TestProcessWorker:
         """Worker handles multiple concurrent dispatch calls."""
         # Arrange
         mock_repo = AsyncMock()
+        mock_ai_extractor = AsyncMock()
+        mock_ai_extractor.extract.return_value = AIExtractedInfo(
+            to="user@example.com",
+            message="Test message",
+            type="email",
+        )
         mock_provider = AsyncMock()
-        mock_provider.send.return_value = ProviderResult(
+        mock_provider.send.return_value = NotificationProviderResult(
             provider_id="p-123", status="delivered"
         )
         worker = ProcessWorker(
             requests_repository=mock_repo,
+            ai_extractor=mock_ai_extractor,
             notification_provider=mock_provider,
         )
 

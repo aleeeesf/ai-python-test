@@ -5,15 +5,20 @@ from datetime import datetime
 
 from application.dtos import StartProcessResultDTO
 from core.logging import get_logger
-from domain.entities.request import NotificationRequest, NotificationStatus
-from domain.exceptions.provider import (
+from domain.exceptions.ai_extractor import AIExtractionError
+from domain.exceptions.notification_provider import (
     ProviderNetworkError,
     ProviderRateLimitError,
     ProviderResponseError,
     ProviderServerError,
     ProviderUnauthorizedError,
 )
-from domain.ports.notification_provider import NotificationProvider, ProviderResult
+from domain.models.request import NotificationRequest, NotificationStatus
+from domain.ports.ai_extractor import AIExtractor
+from domain.ports.notification_provider import (
+    NotificationProvider,
+    NotificationProviderResult,
+)
 from domain.ports.requests_repository import RequestsRepository
 
 logger = get_logger(__name__)
@@ -62,7 +67,7 @@ async def start_process_request(
     request.error = None
     await requests_repository.update(request)
     logger.info(
-        f"Processing started | request_id={request_id} | to={request.to} | type={request.type}"
+        f"Processing started | request_id={request_id} | user_input_len={len(request.user_input)}"
     )
     return StartProcessResultDTO(
         found=True,
@@ -74,33 +79,64 @@ async def start_process_request(
 async def deliver_request(
     request_id: str,
     requests_repository: RequestsRepository,
+    ai_extractor: AIExtractor,
     notification_provider: NotificationProvider,
 ) -> None:
     """
     Deliver a notification request to the external provider.
 
-    Handles all retry logic and updates request status based on outcome.
+    Orchestrates AI extraction, validation, and provider delivery with retry logic.
 
     Args:
         request_id: The ID of the request to deliver.
         requests_repository: The repository for persisting requests.
+        ai_extractor: The AI service for extracting info from user input.
         notification_provider: The external provider client.
 
     Returns:
         None. Updates request status as side effect.
     """
     request = await requests_repository.get_by_id(request_id)
-    if request is None:  # there's no request
+    if request is None:
         logger.warning(f"Deliver skipped | request_id={request_id} | reason=not_found")
         return
-    if (
-        request.status != NotificationStatus.PROCESSING
-    ):  # if its processing by another worker, skip it
+    if request.status != NotificationStatus.PROCESSING:
         logger.debug(
             f"Deliver skipped | request_id={request_id} | current_status={request.status.value} | reason=not_processing"
         )
         return
 
+    # Step 1: Extract information from natural language using AI
+    try:
+        extracted = await ai_extractor.extract(request.user_input)
+        request.to = extracted.to
+        request.message = extracted.message
+        request.type = extracted.type
+        request.updated_at = datetime.now()
+        await requests_repository.update(request)
+        logger.info(
+            f"AI extraction succeeded | request_id={request_id} | to={request.to} | type={request.type}"
+        )
+    except AIExtractionError as error:
+        request.status = NotificationStatus.FAILED
+        request.error = f"AI extraction failed: {error!s}"
+        request.updated_at = datetime.now()
+        await requests_repository.update(request)
+        logger.error(
+            f"AI extraction failed | request_id={request_id} | error={error!s}"
+        )
+        return
+    except Exception as error:
+        request.status = NotificationStatus.FAILED
+        request.error = f"Unexpected AI extraction error: {error}"
+        request.updated_at = datetime.now()
+        await requests_repository.update(request)
+        logger.error(
+            f"AI extraction failed (unexpected) | request_id={request_id} | error={error!s}"
+        )
+        return
+
+    # Step 2: Send notification to external provider with retries
     try:
         provider_result = await _send_with_retries(request, notification_provider)
     except (
@@ -115,16 +151,16 @@ async def deliver_request(
         request.updated_at = datetime.now()
         await requests_repository.update(request)
         logger.error(
-            f"Delivery failed | request_id={request_id} | to={request.to} | error={error!s}"
+            f"Provider delivery failed | request_id={request_id} | to={request.to} | error={error!s}"
         )
         return
     except Exception as error:
         request.status = NotificationStatus.FAILED
-        request.error = f"Unexpected processing error: {error}"
+        request.error = f"Unexpected provider error: {error}"
         request.updated_at = datetime.now()
         await requests_repository.update(request)
         logger.error(
-            f"Delivery failed (unexpected) | request_id={request_id} | to={request.to} | error={error!s}"
+            f"Provider delivery failed (unexpected) | request_id={request_id} | to={request.to} | error={error!s}"
         )
         return
 
@@ -141,7 +177,7 @@ async def deliver_request(
 async def _send_with_retries(
     request: NotificationRequest,
     notification_provider: NotificationProvider,
-) -> ProviderResult:
+) -> NotificationProviderResult:
     """
     Send a notification request to the external provider with retries.
 
@@ -160,6 +196,10 @@ async def _send_with_retries(
     """
     retry_delays_seconds = (0.2, 0.5, 1.0)
     attempts = len(retry_delays_seconds) + 1
+
+    # Ensure extracted fields are present before attempting delivery
+    if not request.to or not request.message or not request.type:
+        raise AIExtractionError("Missing extracted data for notification delivery")
 
     for attempt in range(attempts):
         try:

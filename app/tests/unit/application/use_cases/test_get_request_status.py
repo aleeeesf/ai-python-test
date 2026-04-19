@@ -1,7 +1,6 @@
 """Unit tests for get_request_status function."""
 
 import pytest
-
 from application.use_cases.get_request_status import get_request_status
 
 

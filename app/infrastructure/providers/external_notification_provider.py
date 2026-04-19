@@ -1,14 +1,16 @@
 import httpx
-
-from domain.entities.request import NotificationType
-from domain.exceptions.provider import (
+from domain.exceptions.notification_provider import (
     ProviderNetworkError,
     ProviderRateLimitError,
     ProviderResponseError,
     ProviderServerError,
     ProviderUnauthorizedError,
 )
-from domain.ports.notification_provider import NotificationProvider, ProviderResult
+from domain.models.request import NotificationType
+from domain.ports.notification_provider import (
+    NotificationProvider,
+    NotificationProviderResult,
+)
 
 
 class ExternalNotificationProvider(NotificationProvider):
@@ -21,7 +23,7 @@ class ExternalNotificationProvider(NotificationProvider):
         to: str,
         message: str,
         type: NotificationType,
-    ) -> ProviderResult:
+    ) -> NotificationProviderResult:
         """
         Send a notification to a recipient using the external provider.
 
@@ -31,7 +33,7 @@ class ExternalNotificationProvider(NotificationProvider):
             type: The notification type.
 
         Returns:
-            ProviderResult: The result of the notification send operation.
+            NotificationProviderResult: The result of the notification send operation.
 
         Raises:
             ProviderNetworkError: If there is a network error when connecting to the provider.
@@ -72,7 +74,7 @@ class ExternalNotificationProvider(NotificationProvider):
             status = data.get("status")
             if not isinstance(provider_id, str) or not isinstance(status, str):
                 raise ProviderResponseError("Invalid provider response payload")
-            return ProviderResult(provider_id=provider_id, status=status)
+            return NotificationProviderResult(provider_id=provider_id, status=status)
 
         if response.status_code == 401:
             raise ProviderUnauthorizedError("Invalid API key for external provider")

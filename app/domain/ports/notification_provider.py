@@ -1,11 +1,10 @@
 from typing import Protocol
 
+from domain.models.request import NotificationType
 from pydantic import BaseModel
 
-from domain.entities.request import NotificationType
 
-
-class ProviderResult(BaseModel):
+class NotificationProviderResult(BaseModel):
     """Result of a notification send operation."""
 
     provider_id: str
@@ -18,7 +17,7 @@ class NotificationProvider(Protocol):
         to: str,
         message: str,
         type: NotificationType,
-    ) -> ProviderResult:
+    ) -> NotificationProviderResult:
         """Send a notification to a recipient.
 
         Args:

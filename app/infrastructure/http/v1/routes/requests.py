@@ -1,5 +1,3 @@
-from fastapi import APIRouter, Depends, HTTPException, Response, status
-
 from application.dtos import CreateRequestDTO, CreateResponseDTO, StatusResponseDTO
 from application.use_cases.create_request import create_request
 from application.use_cases.get_request_status import get_request_status
@@ -8,9 +6,10 @@ from core.dependencies import (
     get_process_dispatcher,
     get_requests_repository,
 )
-from domain.entities.request import NotificationStatus
+from domain.models.request import NotificationStatus
 from domain.ports.process_dispatcher import ProcessDispatcher
 from domain.ports.requests_repository import RequestsRepository
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 router = APIRouter(prefix="/requests", tags=["requests"])
 

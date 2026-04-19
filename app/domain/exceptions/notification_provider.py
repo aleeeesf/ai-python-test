@@ -1,3 +1,6 @@
+"""Exceptions for notification providers."""
+
+
 class ProviderUnauthorizedError(Exception):
     """Raised when provider credentials are invalid."""
 

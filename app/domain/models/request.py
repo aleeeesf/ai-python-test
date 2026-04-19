@@ -25,20 +25,28 @@ class NotificationRequest(BaseModel):
         examples=["123e4567-e89b-12d3-a456-426614174000"],
         description="The ID of the notification request.",
     )
-    to: str = Field(
+    user_input: str = Field(
         ...,
+        min_length=1,
+        examples=["Manda un mail a feda@test.com diciendo hola"],
+        description="The natural language input from the user.",
+    )
+    to: str | None = Field(
+        default=None,
         min_length=1,
         examples=["user@example.com"],
-        description="The recipient of the notification.",
+        description="The recipient of the notification (extracted from user_input).",
     )
-    message: str = Field(
-        ...,
+    message: str | None = Field(
+        default=None,
         min_length=1,
         examples=["Your verification code is 1234"],
-        description="The message to send.",
+        description="The message to send (extracted from user_input).",
     )
-    type: NotificationType = Field(
-        ..., examples=["email"], description="The type of notification."
+    type: NotificationType | None = Field(
+        default=None,
+        examples=["email"],
+        description="The type of notification (extracted from user_input).",
     )
     status: NotificationStatus = Field(
         ...,

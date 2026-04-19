@@ -1,8 +1,10 @@
 from functools import lru_cache
 
 from core.settings import Settings, settings
+from domain.ports.ai_extractor import AIExtractor
 from domain.ports.notification_provider import NotificationProvider
 from domain.ports.process_dispatcher import ProcessDispatcher
+from infrastructure.providers.external_ai_extractor import ExternalAIExtractor
 from infrastructure.providers.external_notification_provider import (
     ExternalNotificationProvider,
 )
@@ -25,6 +27,17 @@ def get_requests_repository() -> InMemoryRequestsRepository:
 
 
 @lru_cache(maxsize=1)
+def get_ai_extractor() -> AIExtractor:
+    """Get the AI extractor instance."""
+    app_settings = get_settings()
+    provider_settings = app_settings.external_provider
+    return ExternalAIExtractor(
+        api_url=provider_settings.api_url,
+        api_key=provider_settings.api_key,
+    )
+
+
+@lru_cache(maxsize=1)
 def get_notification_provider() -> NotificationProvider:
     """Get the notification provider instance."""
     app_settings = get_settings()
@@ -40,5 +53,6 @@ def get_process_dispatcher() -> ProcessDispatcher:
     """Get the process dispatcher instance."""
     return ProcessWorker(
         requests_repository=get_requests_repository(),
+        ai_extractor=get_ai_extractor(),
         notification_provider=get_notification_provider(),
     )

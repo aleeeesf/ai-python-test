@@ -2,7 +2,7 @@
 
 import asyncio
 
-from domain.entities.request import NotificationRequest, NotificationStatus
+from domain.models.request import NotificationRequest, NotificationStatus
 
 
 class TestCreateRequest:
@@ -12,9 +12,7 @@ class TestCreateRequest:
         """POST /v1/requests returns 201 and a generated request ID."""
         # Arrange
         payload = {
-            "to": "user@example.com",
-            "message": "Test notification",
-            "type": "email",
+            "user_input": "Manda un mail a user@example.com diciendo Test notification"
         }
 
         # Act
@@ -26,14 +24,10 @@ class TestCreateRequest:
         assert isinstance(body["id"], str)
         assert body["id"]
 
-    def test_rejects_create_request_with_empty_to(self, client):
-        """POST /v1/requests rejects payload with empty 'to' field."""
+    def test_rejects_create_request_with_empty_user_input(self, client):
+        """POST /v1/requests rejects payload with empty 'user_input' field."""
         # Arrange
-        payload = {
-            "to": "",
-            "message": "Test notification",
-            "type": "email",
-        }
+        payload = {"user_input": ""}
 
         # Act
         response = client.post("/v1/requests", json=payload)
@@ -41,14 +35,10 @@ class TestCreateRequest:
         # Assert
         assert response.status_code == 422  # Validation error
 
-    def test_rejects_create_request_with_empty_message(self, client):
-        """POST /v1/requests rejects payload with empty 'message' field."""
+    def test_rejects_create_request_with_missing_user_input(self, client):
+        """POST /v1/requests rejects payload missing 'user_input' field."""
         # Arrange
-        payload = {
-            "to": "user@example.com",
-            "message": "",
-            "type": "email",
-        }
+        payload = {}
 
         # Act
         response = client.post("/v1/requests", json=payload)
@@ -56,86 +46,10 @@ class TestCreateRequest:
         # Assert
         assert response.status_code == 422
 
-    def test_rejects_create_request_with_invalid_type(self, client):
-        """POST /v1/requests rejects payload with invalid notification type."""
+    def test_rejects_create_request_with_non_string_user_input(self, client):
+        """POST /v1/requests rejects 'user_input' field that is not a string."""
         # Arrange
-        payload = {
-            "to": "user@example.com",
-            "message": "Test notification",
-            "type": "telegram",  # Not in {email, sms, push}
-        }
-
-        # Act
-        response = client.post("/v1/requests", json=payload)
-
-        # Assert
-        assert response.status_code == 422
-
-    def test_rejects_create_request_with_missing_to(self, client):
-        """POST /v1/requests rejects payload missing 'to' field."""
-        # Arrange
-        payload = {
-            "message": "Test notification",
-            "type": "email",
-        }
-
-        # Act
-        response = client.post("/v1/requests", json=payload)
-
-        # Assert
-        assert response.status_code == 422
-
-    def test_rejects_create_request_with_missing_message(self, client):
-        """POST /v1/requests rejects payload missing 'message' field."""
-        # Arrange
-        payload = {
-            "to": "user@example.com",
-            "type": "email",
-        }
-
-        # Act
-        response = client.post("/v1/requests", json=payload)
-
-        # Assert
-        assert response.status_code == 422
-
-    def test_rejects_create_request_with_missing_type(self, client):
-        """POST /v1/requests rejects payload missing 'type' field."""
-        # Arrange
-        payload = {
-            "to": "user@example.com",
-            "message": "Test notification",
-        }
-
-        # Act
-        response = client.post("/v1/requests", json=payload)
-
-        # Assert
-        assert response.status_code == 422
-
-    def test_rejects_create_request_with_non_string_to(self, client):
-        """POST /v1/requests rejects 'to' field that is not a string."""
-        # Arrange
-        payload = {
-            "to": 123,
-            "message": "Test notification",
-            "type": "email",
-        }
-
-        # Act
-        response = client.post("/v1/requests", json=payload)
-
-        # Assert
-        assert response.status_code == 422
-
-    def test_rejects_create_request_with_non_string_message(self, client):
-        """POST /v1/requests rejects 'message' field that is not a string."""
-        # Arrange
-        payload = {
-            "to": "user@example.com",
-            "message": 123,
-            "type": "email",
-        }
+        payload = {"user_input": 123}
 
         # Act
         response = client.post("/v1/requests", json=payload)
@@ -165,9 +79,7 @@ class TestProcessRequest:
         create_response = client.post(
             "/v1/requests",
             json={
-                "to": "user@example.com",
-                "message": "Test notification",
-                "type": "email",
+                "user_input": "Manda un mail a user@example.com diciendo Test notification"
             },
         )
         request_id = create_response.json()["id"]
@@ -191,9 +103,7 @@ class TestProcessRequest:
         create_response = client.post(
             "/v1/requests",
             json={
-                "to": "user@example.com",
-                "message": "Test notification",
-                "type": "email",
+                "user_input": "Manda un mail a user@example.com diciendo Test notification"
             },
         )
         request_id = create_response.json()["id"]
@@ -215,9 +125,7 @@ class TestProcessRequest:
         create_response = client.post(
             "/v1/requests",
             json={
-                "to": "user@example.com",
-                "message": "Test notification",
-                "type": "email",
+                "user_input": "Manda un mail a user@example.com diciendo Test notification"
             },
         )
         request_id = create_response.json()["id"]
@@ -235,6 +143,7 @@ class TestProcessRequest:
         # Arrange - Save a FAILED request directly to repository
         failed_req = NotificationRequest(
             id="failed-request",
+            user_input="Manda un mail a user@example.com diciendo Test",
             to="user@example.com",
             message="Test",
             type="email",
@@ -268,9 +177,7 @@ class TestGetRequestStatus:
         create_response = client.post(
             "/v1/requests",
             json={
-                "to": "user@example.com",
-                "message": "Test notification",
-                "type": "email",
+                "user_input": "Manda un mail a user@example.com diciendo Test notification"
             },
         )
         request_id = create_response.json()["id"]
