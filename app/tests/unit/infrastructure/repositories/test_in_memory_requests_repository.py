@@ -1,6 +1,7 @@
 """Unit tests for InMemoryRequestsRepository."""
 
 import pytest
+
 from domain.models.request import NotificationStatus
 from infrastructure.repositories.in_memory_requests_repository import (
     InMemoryRequestsRepository,

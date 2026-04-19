@@ -5,6 +5,8 @@ import re
 from typing import Any
 
 import httpx
+from pydantic import ValidationError
+
 from core.logging import get_logger
 from domain.exceptions.ai_extractor import (
     AINetworkError,
@@ -17,7 +19,6 @@ from domain.ports.ai_extractor import (
     AIResponse,
     ChatMessage,
 )
-from pydantic import ValidationError
 
 logger = get_logger(__name__)
 

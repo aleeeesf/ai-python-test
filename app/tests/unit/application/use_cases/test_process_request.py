@@ -1,6 +1,7 @@
 """Unit tests for start_process_request and deliver_request functions."""
 
 import pytest
+
 from application.use_cases.process_request import (
     deliver_request,
     start_process_request,

@@ -1,6 +1,7 @@
 """Unit tests for create_request function."""
 
 import pytest
+
 from application.dtos import CreateRequestDTO
 from application.use_cases.create_request import create_request
 from domain.models.request import NotificationStatus

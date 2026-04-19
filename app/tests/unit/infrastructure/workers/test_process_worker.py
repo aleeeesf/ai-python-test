@@ -4,6 +4,7 @@ import asyncio
 from unittest.mock import AsyncMock
 
 import pytest
+
 from domain.ports.ai_extractor import AIExtractedInfo
 from domain.ports.notification_provider import NotificationProviderResult
 from infrastructure.workers.process_worker import ProcessWorker

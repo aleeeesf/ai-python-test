@@ -1,5 +1,6 @@
-from domain.models.request import NotificationStatus
 from pydantic import BaseModel, Field
+
+from domain.models.request import NotificationStatus
 
 
 class CreateRequestDTO(BaseModel):

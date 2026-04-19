@@ -3,6 +3,7 @@
 import httpx
 import pytest
 import respx
+
 from domain.exceptions.ai_extractor import (
     AINetworkError,
     AIProviderError,

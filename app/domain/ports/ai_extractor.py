@@ -2,8 +2,9 @@
 
 from typing import Literal, Protocol
 
-from domain.models.request import NotificationType
 from pydantic import AliasChoices, BaseModel, Field, field_validator
+
+from domain.models.request import NotificationType
 
 
 class ChatMessage(BaseModel):

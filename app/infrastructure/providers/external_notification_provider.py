@@ -1,4 +1,5 @@
 import httpx
+
 from domain.exceptions.notification_provider import (
     ProviderNetworkError,
     ProviderRateLimitError,

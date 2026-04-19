@@ -19,6 +19,8 @@ from fastapi.testclient import TestClient
 # Ensure tests resolve imports from the app runtime root.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from main import app as fastapi_app
+
 from core.dependencies import (
     get_ai_extractor,
     get_notification_provider,
@@ -40,7 +42,6 @@ from domain.ports.process_dispatcher import ProcessDispatcher
 from infrastructure.repositories.in_memory_requests_repository import (
     InMemoryRequestsRepository,
 )
-from main import app as fastapi_app
 
 
 class FakeAIExtractor:

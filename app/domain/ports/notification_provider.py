@@ -1,7 +1,8 @@
 from typing import Protocol
 
-from domain.models.request import NotificationType
 from pydantic import BaseModel
+
+from domain.models.request import NotificationType
 
 
 class NotificationProviderResult(BaseModel):

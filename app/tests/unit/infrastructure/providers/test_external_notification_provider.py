@@ -3,6 +3,7 @@
 import httpx
 import pytest
 import respx
+
 from domain.exceptions.notification_provider import (
     ProviderNetworkError,
     ProviderRateLimitError,
